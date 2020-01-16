@@ -1338,8 +1338,8 @@ rd_kafka_mock_handle_TxnOffsetCommit (rd_kafka_mock_connection_t *mconn,
 
         if (!err &&
             rd_kafka_mock_cluster_get_coord(mcluster,
-                                            RD_KAFKA_COORD_TXN,
-                                            &TransactionalId) != mconn->broker)
+                                            RD_KAFKA_COORD_GROUP,
+                                            &GroupId) != mconn->broker)
                 err = RD_KAFKA_RESP_ERR_NOT_COORDINATOR;
 
         while (TopicsCnt-- > 0) {
