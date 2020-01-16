@@ -592,8 +592,11 @@ rd_kafka_parse_Metadata (rd_kafka_broker_t *rkb,
 
         /* Try to acquire a Producer ID from this broker if we
          * don't have one. */
-        if (rd_kafka_is_idempotent(rkb->rkb_rk))
+        if (rd_kafka_is_idempotent(rkb->rkb_rk)) {
+                rd_kafka_wrlock(rkb->rkb_rk);
                 rd_kafka_idemp_pid_fsm(rkb->rkb_rk);
+                rd_kafka_wrunlock(rkb->rkb_rk);
+        }
 
 done:
         if (missing_topics)

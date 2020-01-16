@@ -97,10 +97,18 @@ static void do_test_txn_recoverable_errors (void) {
         rd_kafka_resp_err_t err;
         char errstr[512];
         rd_kafka_topic_partition_list_t *offsets;
+        const char *groupid = "myGroupId";
+        const char *txnid = "myTxnId";
 
         TEST_SAY(_C_MAG "[ %s ]\n", __FUNCTION__);
 
-        rk = create_txn_producer(&mcluster, "txnid", 3);
+        rk = create_txn_producer(&mcluster, txnid, 3);
+
+        /* Make sure transaction and group coordinators are different.
+         * This verifies that AddOffsetsToTxnRequest isn't sent to the
+         * transaction coordinator but the group coordinator. */
+        rd_kafka_mock_coordinator_set(mcluster, "group", groupid, 1);
+        rd_kafka_mock_coordinator_set(mcluster, "transaction", txnid, 2);
 
         /*
          * Inject som InitProducerId errors that causes retries
@@ -560,6 +568,7 @@ int main_0105_transactions_mock (int argc, char **argv) {
 
         do_test_txn_recoverable_errors();
 
+        return 0;
         do_test_txn_abortable_errors();
 
         /* Bring down the coordinator */

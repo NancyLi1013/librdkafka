@@ -370,8 +370,10 @@ struct rd_kafka_s {
                                                  *   (produce) messages. */
 
                 rd_kafkap_str_t *transactional_id; /**< transactional.id */
-                rd_kafka_txn_state_t txn_state; /**< Transactional state */
-                rd_ts_t ts_txn_state;           /**< Last state change */
+                rd_kafka_txn_state_t txn_state; /**< Transactional state.
+                                                 *   @locks rk_lock */
+                rd_ts_t ts_txn_state;           /**< Last state change.
+                                                 *   @locks rk_lock */
                 rd_kafka_broker_t *txn_coord;   /**< Transaction coordinator,
                                                  *   this is a logical broker.*/
                 rd_kafka_broker_t *txn_curr_coord; /**< Current actual coord
@@ -427,8 +429,7 @@ struct rd_kafka_s {
                  *   out and returned this queue reference simply points
                  *   to a disabled queue that will discard any ops enqueued.
                  *
-                 * @locality rdkafka main thread
-                 * @locks none
+                 *   @locks rk_lock
                  */
                 rd_kafka_q_t *txn_init_rkq;
 

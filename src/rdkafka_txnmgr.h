@@ -143,13 +143,11 @@ void rd_kafka_txn_set_abortable_error (rd_kafka_t *rk,
                                        rd_kafka_resp_err_t err,
                                        const char *fmt, ...);
 
-void rd_kafka_txn_set_fatal_error (rd_kafka_t *rk,
+void rd_kafka_txn_set_fatal_error (rd_kafka_t *rk, rd_dolock_t do_lock,
                                    rd_kafka_resp_err_t err,
                                    const char *fmt, ...);
 
-rd_bool_t rd_kafka_txn_coord_query (rd_kafka_t *rk,
-                                    rd_kafka_broker_t *rkb,
-                                    const char *reason);
+rd_bool_t rd_kafka_txn_coord_query (rd_kafka_t *rk, const char *reason);
 
 rd_bool_t rd_kafka_txn_coord_set (rd_kafka_t *rk, rd_kafka_broker_t *rkb,
                                   const char *fmt, ...);

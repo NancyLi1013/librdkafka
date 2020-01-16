@@ -150,7 +150,7 @@ rd_kafka_idemp_broker_any (rd_kafka_t *rk,
  *
  * @returns rd_true if a fatal error was triggered, else rd_false.
  *
- * @locks none
+ * @locks rd_kafka_wrlock() MUST be held
  * @locality rdkafka main thread
  */
 rd_bool_t rd_kafka_idemp_check_error (rd_kafka_t *rk,
@@ -164,13 +164,13 @@ rd_bool_t rd_kafka_idemp_check_error (rd_kafka_t *rk,
         case RD_KAFKA_RESP_ERR_INVALID_TRANSACTION_TIMEOUT:
         case RD_KAFKA_RESP_ERR_TRANSACTIONAL_ID_AUTHORIZATION_FAILED:
                 if (rd_kafka_is_transactional(rk))
-                        rd_kafka_txn_set_fatal_error(rk, err, "%s", errstr);
+                        rd_kafka_txn_set_fatal_error(rk, RD_DONT_LOCK,
+                                                     err, "%s", errstr);
                 else
-                        rd_kafka_set_fatal_error(rk, err, "%s", errstr);
+                        rd_kafka_set_fatal_error0(rk, RD_DONT_LOCK,
+                                                  err, "%s", errstr);
 
-                rd_kafka_wrlock(rk);
                 rd_kafka_idemp_set_state(rk, RD_KAFKA_IDEMP_STATE_FATAL_ERROR);
-                rd_kafka_wrunlock(rk);
 
                 is_fatal = rd_true;
                 break;
@@ -188,7 +188,7 @@ rd_bool_t rd_kafka_idemp_check_error (rd_kafka_t *rk,
  *        and transactional producers.
  *
  * @locality rdkafka main thread
- * @locks FIXME
+ * @locks rd_kafka_wrlock() MUST be held.
  */
 void rd_kafka_idemp_pid_fsm (rd_kafka_t *rk) {
         rd_kafka_resp_err_t err;
@@ -226,7 +226,7 @@ void rd_kafka_idemp_pid_fsm (rd_kafka_t *rk) {
                  * Look up transaction coordinator.
                  * When the coordinator is known this FSM will be called again.
                  */
-                if (rd_kafka_txn_coord_query(rk, NULL, "Acquire PID"))
+                if (rd_kafka_txn_coord_query(rk, "Acquire PID"))
                         return; /* Fatal error */
                 break;
 
@@ -241,7 +241,6 @@ void rd_kafka_idemp_pid_fsm (rd_kafka_t *rk) {
                         rd_kafka_broker_keep(rkb);
 
                 } else {
-                        /* FIXME: lock */
                         rkb = rd_kafka_idemp_broker_any(rk, &err,
                                                         errstr, sizeof(errstr));
 
@@ -298,21 +297,21 @@ void rd_kafka_idemp_pid_fsm (rd_kafka_t *rk) {
                 break;
 
         case RD_KAFKA_IDEMP_STATE_WAIT_PID:
-                /**< PID requested, waiting for reply */
+                /* PID requested, waiting for reply */
                 break;
 
         case RD_KAFKA_IDEMP_STATE_ASSIGNED:
-                /**< New PID assigned */
+                /* New PID assigned */
                 break;
 
         case RD_KAFKA_IDEMP_STATE_DRAIN_RESET:
-                /**< Wait for outstanding ProduceRequests to finish
-                 *   before resetting and re-requesting a new PID. */
+                /* Wait for outstanding ProduceRequests to finish
+                 * before resetting and re-requesting a new PID. */
                 break;
 
         case RD_KAFKA_IDEMP_STATE_DRAIN_BUMP:
-                /**< Wait for outstanding ProduceRequests to finish
-                 *   before bumping the current epoch. */
+                /* Wait for outstanding ProduceRequests to finish
+                 * before bumping the current epoch. */
                 break;
         }
 }
@@ -327,7 +326,9 @@ void rd_kafka_idemp_pid_fsm (rd_kafka_t *rk) {
 static void rd_kafka_idemp_pid_timer_cb (rd_kafka_timers_t *rkts, void *arg) {
         rd_kafka_t *rk = arg;
 
+        rd_kafka_wrlock(rk);
         rd_kafka_idemp_pid_fsm(rk);
+        rd_kafka_wrunlock(rk);
 }
 
 
@@ -374,21 +375,24 @@ void rd_kafka_idemp_request_pid_failed (rd_kafka_broker_t *rkb,
                     "Failed to acquire PID from broker %s: %s",
                     rd_kafka_broker_name(rkb), rd_kafka_err2str(err));
 
-        if (rd_kafka_idemp_check_error(rk, err, errstr))
+        rd_kafka_wrlock(rk);
+
+        if (rd_kafka_idemp_check_error(rk, err, errstr)) {
+                rd_kafka_wrunlock(rk);
                 return; /* Fatal error */
+        }
 
         RD_UT_COVERAGE(0);
-
-        /* Restart acquisition after a short wait */
-        rd_kafka_wrlock(rk);
 
         if (err == RD_KAFKA_RESP_ERR_NOT_COORDINATOR ||
             err == RD_KAFKA_RESP_ERR_COORDINATOR_NOT_AVAILABLE)
                 rd_kafka_txn_coord_set(rk, NULL, "%s", errstr);
 
         rd_kafka_idemp_set_state(rk, RD_KAFKA_IDEMP_STATE_REQ_PID);
+
         rd_kafka_wrunlock(rk);
 
+        /* Restart acquisition after a short wait */
         rd_kafka_idemp_pid_timer_restart(rk, rd_false, errstr);
 }
 
